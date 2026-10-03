@@ -380,14 +380,12 @@ function getRec(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]')
 function saveRec(r){const a=getRec();a.push(r);localStorage.setItem(STORAGE_KEY,JSON.stringify(a))}
 function clrRec(){localStorage.removeItem(STORAGE_KEY)}
 function safe(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo({top:0,behavior:'smooth'})}
-function typeChips(){document.getElementById('tprev').innerHTML=TYPE_ORDER.map(k=>`<span class="tchip">${typeIcon(k)}<span>${T[k].name}</span></span>`).join('')}
-typeChips();
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const target=document.getElementById(id);if(!target)return;target.classList.add('active');window.scrollTo({top:0,behavior:'smooth'})}
 
 /* ADMIN LOGIN */
 function openA(){document.getElementById('amd').classList.add('open');document.getElementById('ainp').value='';document.getElementById('aerr').style.display='none';setTimeout(()=>document.getElementById('ainp').focus(),100)}
 function closeA(){document.getElementById('amd').classList.remove('open')}
-function chkA(){const v=document.getElementById('ainp').value;if(v===ADMIN_CODE){closeA();showAdm()}else{document.getElementById('aerr').style.display='block';document.getElementById('ainp').value=''}}
+function chkA(){const v=document.getElementById('ainp').value.trim();if(v===ADMIN_CODE){closeA();showAdm()}else{document.getElementById('aerr').style.display='block';document.getElementById('ainp').value=''}}
 document.getElementById('amd').addEventListener('click',function(e){if(e.target===this)closeA()});
 
 /* QUIZ */
