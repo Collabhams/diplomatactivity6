@@ -374,11 +374,39 @@ const QS=[
 
 /* STATE / STORAGE */
 const ADMIN_CODE='2026-6dip';
-const STORAGE_KEY='dip6_res_v3';
+const STORAGE_KEY='dip6_res_v3'; 
+const API_URL='https://script.google.com/macros/s/AKfycbyzR0VFJZqVEEAa2KpIGqUXeLBbK1h39tgomhIS2rGyxVZwddjYHY0Cv_F-_9ZqKdVAfw/exec';
+const WRITE_KEY='YD6-SUBMIT-2026';
 let cur=0,uname='',ans=[];let shuffled=QS.map(q=>shuffle([...q.opts]));
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function getRec(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]')}catch(e){return[]}}
-function saveRec(r){const a=getRec();a.push(r);localStorage.setItem(STORAGE_KEY,JSON.stringify(a))}
+function saveRec(r) {
+  // 기존 브라우저에도 결과를 백업
+  try {
+    const a = getRec();
+    a.push(r);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(a));
+  } catch (e) {
+    console.warn('local backup failed', e);
+  }
+
+  // Google Sheets로 결과 전송
+  const payload = {
+    ...r,
+    writeKey: WRITE_KEY
+  };
+
+  fetch(API_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8'
+    },
+    body: JSON.stringify(payload)
+  }).catch(err => {
+    console.error('central save failed:', err);
+  });
+}
 function clrRec(){localStorage.removeItem(STORAGE_KEY)}
 function safe(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const target=document.getElementById(id);if(!target)return;target.classList.add('active');window.scrollTo({top:0,behavior:'smooth'})}
@@ -399,8 +427,19 @@ function nextQ(){if(ans[cur]===null)return;if(cur<QS.length-1){cur++;render()}el
 
 /* RESULT */
 function finalType(counts){const max=Math.max(...TYPE_ORDER.map(k=>counts[k]));const tied=TYPE_ORDER.filter(k=>counts[k]===max);if(tied.length===1)return tied[0];for(let i=ans.length-1;i>=0;i--){const k=shuffled[i][ans[i]]?.y;if(tied.includes(k))return k}return tied[0]}
-function calc(){const c=Object.fromEntries(TYPE_ORDER.map(k=>[k,0]));ans.forEach((a,qi)=>{if(a!==null)c[shuffled[qi][a].y]++});const tk=finalType(c),tp=T[tk];saveRec({name:uname,tk,tn:tp.name,kw:tp.kw,time:new Date().toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})});
- const coreHtml=tp.cores.map(x=>`<div class="rcore-item"><div class="rcore-lbl">${x.l}</div><div class="rcore-val">${x.v}</div></div>`).join('');
+function calc(){const c=Object.fromEntries(TYPE_ORDER.map(k=>[k,0]));ans.forEach((a,qi)=>{if(a!==null)c[shuffled[qi][a].y]++});const tk=finalType(c),tp=T[tk];saveRec({
+  name: uname,
+  tk: tk,
+  tn: tp.name,
+  kw: tp.kw,
+  counts: c,
+  time: new Date().toLocaleString('ko-KR', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+});
  const focusHtml=tp.focuses.map(x=>`<div class="focus-card"><div class="focus-icon">${typeIcon(x.icon)}</div><div><div class="focus-title">${x.title}</div><div class="focus-desc">${x.desc}</div></div></div>`).join('');
  const barHtml=TYPE_ORDER.map(k=>{const t=T[k],p=Math.round((c[k]/QS.length)*100);return `<div><div class="cmeta"><span class="clbl">${typeIcon(k)}${t.name}</span><span class="cnum">${c[k]}번 · ${p}%</span></div><div class="ctrack"><div class="cfill" data-p="${p}"></div></div></div>`}).join('');
  const pt=T[tp.partner];
