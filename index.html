@@ -106,6 +106,8 @@ button{color:inherit}
 .result-passport{padding-top:20px}
 .rnotice{max-width:100%}
 .partner-desc{white-space:normal}
+.ad-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.admin-note{font-size:10px;color:#8290a5}
 
 </style>
 </head>
@@ -201,8 +203,8 @@ button{color:inherit}
 
 <!-- ADMIN -->
 <div id="admin" class="screen"><div class="w"><div class="ticket admin-ticket">
-  <div class="adhdr"><div><div class="adbadge">YD-06 / ADMINISTRATION</div><div class="adtitle">참여자 결과 현황</div></div><button class="adexit" onclick="exitAdm()">← 나가기</button></div>
-  <div class="adstats" id="adstats"></div><div class="frow" id="frow"></div><div class="rlist" id="rlist"></div><div class="adbot"><button class="adclr" onclick="clrAll()">전체 데이터 초기화</button></div>
+  <div class="adhdr"><div><div class="adbadge">YD-06 / ADMINISTRATION</div><div class="adtitle">참여자 결과 현황</div></div><div class="ad-actions"><button class="adexit" onclick="refreshAdm()">↻ 결과 새로고침</button><button class="adexit" onclick="exitAdm()">← 나가기</button></div></div>
+  <div class="adstats" id="adstats"></div><div class="frow" id="frow"></div><div class="rlist" id="rlist"></div><div class="adbot"><span class="admin-note">중앙 저장된 결과는 Google Sheets에서 관리됩니다.</span></div>
 </div></div></div>
 
 <script>
@@ -373,7 +375,6 @@ const QS=[
 ];
 
 /* STATE / STORAGE */
-const ADMIN_CODE='2026-6dip';
 const STORAGE_KEY='dip6_res_v3'; 
 const API_URL='https://script.google.com/macros/s/AKfycbyzR0VFJZqVEEAa2KpIGqUXeLBbK1h39tgomhIS2rGyxVZwddjYHY0Cv_F-_9ZqKdVAfw/exec';
 const WRITE_KEY='YD6-SUBMIT-2026';
@@ -411,10 +412,109 @@ function clrRec(){localStorage.removeItem(STORAGE_KEY)}
 function safe(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const target=document.getElementById(id);if(!target)return;target.classList.add('active');window.scrollTo({top:0,behavior:'smooth'})}
 
-/* ADMIN LOGIN */
-function openA(){document.getElementById('amd').classList.add('open');document.getElementById('ainp').value='';document.getElementById('aerr').style.display='none';setTimeout(()=>document.getElementById('ainp').focus(),100)}
+/* ADMIN LOGIN + CENTRAL DATA */
+let remoteRecords = [];
+let adminCodeSession = '';
+let af = 'all';
+
+function openA(){
+  document.getElementById('amd').classList.add('open');
+  document.getElementById('ainp').value='';
+  document.getElementById('aerr').textContent='코드가 올바르지 않습니다.';
+  document.getElementById('aerr').style.display='none';
+  setTimeout(()=>document.getElementById('ainp').focus(),100);
+}
 function closeA(){document.getElementById('amd').classList.remove('open')}
-function chkA(){const v=document.getElementById('ainp').value.trim();if(v===ADMIN_CODE){closeA();showAdm()}else{document.getElementById('aerr').style.display='block';document.getElementById('ainp').value=''}}
+
+function loadAdminRecords(code){
+  return new Promise((resolve,reject)=>{
+    const callbackName='__yd6AdminCallback_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const script=document.createElement('script');
+    const timer=setTimeout(()=>{
+      cleanup();
+      reject(new Error('관리자 데이터 요청 시간이 초과되었습니다.'));
+    },12000);
+
+    function cleanup(){
+      clearTimeout(timer);
+      try{delete window[callbackName]}catch(e){window[callbackName]=undefined}
+      script.remove();
+    }
+
+    window[callbackName]=(data)=>{
+      cleanup();
+      resolve(data);
+    };
+
+    script.onerror=()=>{
+      cleanup();
+      reject(new Error('Apps Script 서버에 연결하지 못했습니다.'));
+    };
+
+    script.src=API_URL+
+      '?action=read'+
+      '&key='+encodeURIComponent(code)+
+      '&callback='+encodeURIComponent(callbackName);
+
+    document.body.appendChild(script);
+  });
+}
+
+function sheetRowsToRecords(rows){
+  if(!Array.isArray(rows)||rows.length<=1)return [];
+  return rows.slice(1).map(row=>({
+    time: String(row[0]||''),
+    name: String(row[1]||''),
+    tk: String(row[2]||''),
+    tn: String(row[3]||''),
+    counts:{
+      P:Number(row[4]||0),
+      S:Number(row[5]||0),
+      G:Number(row[6]||0),
+      F:Number(row[7]||0),
+      C:Number(row[8]||0),
+      W:Number(row[9]||0)
+    },
+    kw: String(row[10]||'')
+  }));
+}
+
+async function chkA(){
+  const input=document.getElementById('ainp');
+  const err=document.getElementById('aerr');
+  const code=input.value.trim();
+
+  if(!code){
+    err.textContent='관리자 코드를 입력해주세요.';
+    err.style.display='block';
+    input.focus();
+    return;
+  }
+
+  err.style.display='none';
+  try{
+    const data=await loadAdminRecords(code);
+    if(!data||data.ok!==true){
+      err.textContent='관리자 코드가 올바르지 않습니다.';
+      err.style.display='block';
+      input.value='';
+      input.focus();
+      return;
+    }
+
+    adminCodeSession=code;
+    remoteRecords=sheetRowsToRecords(data.rows);
+    af='all';
+    closeA();
+    renderAdm();
+    show('admin');
+  }catch(error){
+    console.error('admin data load failed:',error);
+    err.textContent='관리자 서버에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.';
+    err.style.display='block';
+  }
+}
+
 document.getElementById('amd').addEventListener('click',function(e){if(e.target===this)closeA()});
 
 /* QUIZ */
@@ -465,12 +565,38 @@ function calc(){const c=Object.fromEntries(TYPE_ORDER.map(k=>[k,0]));ans.forEach
 function restart(){cur=0;ans=new Array(QS.length).fill(null);document.getElementById('ninp').value='';show('intro')}
 
 /* ADMIN */
-let af='all';
 function showAdm(){renderAdm();show('admin')}
 function exitAdm(){show('intro')}
-function renderAdm(){const recs=getRec();const tc=Object.fromEntries(TYPE_ORDER.map(k=>[k,0]));recs.forEach(r=>{if(tc[r.tk]!==undefined)tc[r.tk]++});document.getElementById('adstats').innerHTML=`<div class="stcrd"><div class="stemi">${ICONS.group}</div><div class="stnum">${recs.length}</div><div class="stlbl">총 참여자</div></div>`+TYPE_ORDER.map(k=>`<div class="stcrd"><div class="stemi">${typeIcon(k)}</div><div class="stnum">${tc[k]}</div><div class="stlbl">${T[k].name}</div></div>`).join('');document.getElementById('frow').innerHTML=`<button class="fbtn ${af==='all'?'on':''}" onclick="setF('all')">전체 (${recs.length})</button>`+TYPE_ORDER.map(k=>`<button class="fbtn ${af===k?'on':''}" onclick="setF('${k}')">${T[k].name} ${tc[k]}</button>`).join('');const fl=af==='all'?recs:recs.filter(r=>r.tk===af);const le=document.getElementById('rlist');if(fl.length===0){le.innerHTML=`<div class="empty"><div class="ei">${ICONS.flag}</div>아직 참여자가 없습니다.</div>`;return}le.innerHTML=fl.slice().reverse().map((r,i)=>`<div class="rrow"><div class="rnum">${fl.length-i}</div><div class="remi">${typeIcon(r.tk)}</div><div class="rinfo"><div class="rnam">${safe(r.name)}</div><div class="rtyp">${safe(r.tn)} · ${safe(r.kw)}</div></div><div class="rtim">${safe(r.time||'')}</div></div>`).join('')}
+
+async function refreshAdm(){
+  try{
+    const data=await loadAdminRecords(adminCodeSession);
+    if(!data||data.ok!==true){
+      alert('관리자 인증을 다시 확인해주세요.');
+      exitAdm();
+      openA();
+      return;
+    }
+    remoteRecords=sheetRowsToRecords(data.rows);
+    renderAdm();
+  }catch(error){
+    console.error('admin refresh failed:',error);
+    alert('결과를 새로고침하지 못했습니다. 인터넷 연결을 확인하고 다시 시도해주세요.');
+  }
+}
+
+function renderAdm(){
+  const recs=remoteRecords;
+  const tc=Object.fromEntries(TYPE_ORDER.map(k=>[k,0]));
+  recs.forEach(r=>{if(tc[r.tk]!==undefined)tc[r.tk]++});
+  document.getElementById('adstats').innerHTML=`<div class="stcrd"><div class="stemi">${ICONS.group}</div><div class="stnum">${recs.length}</div><div class="stlbl">총 참여자</div></div>`+TYPE_ORDER.map(k=>`<div class="stcrd"><div class="stemi">${typeIcon(k)}</div><div class="stnum">${tc[k]}</div><div class="stlbl">${T[k].name}</div></div>`).join('');
+  document.getElementById('frow').innerHTML=`<button class="fbtn ${af==='all'?'on':''}" onclick="setF('all')">전체 (${recs.length})</button>`+TYPE_ORDER.map(k=>`<button class="fbtn ${af===k?'on':''}" onclick="setF('${k}')">${T[k].name} ${tc[k]}</button>`).join('');
+  const fl=af==='all'?recs:recs.filter(r=>r.tk===af);
+  const le=document.getElementById('rlist');
+  if(fl.length===0){le.innerHTML=`<div class="empty"><div class="ei">${ICONS.flag}</div>아직 참여자가 없습니다.</div>`;return}
+  le.innerHTML=fl.slice().reverse().map((r,i)=>`<div class="rrow"><div class="rnum">${fl.length-i}</div><div class="remi">${typeIcon(r.tk)}</div><div class="rinfo"><div class="rnam">${safe(r.name)}</div><div class="rtyp">${safe(r.tn)} · ${safe(r.kw)}</div></div><div class="rtim">${safe(r.time||'')}</div></div>`).join('');
+}
 function setF(f){af=f;renderAdm()}
-function clrAll(){if(confirm('전체 데이터를 초기화할까요?')){clrRec();renderAdm()}}
 </script>
 </body>
 </html>
