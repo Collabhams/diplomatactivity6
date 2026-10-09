@@ -447,17 +447,6 @@ function calc(){const c=Object.fromEntries(TYPE_ORDER.map(k=>[k,0]));ans.forEach
   `<div class="rcore-item"><div class="rcore-lbl">${x.l}</div><div class="rcore-val">${x.v}</div></div>`
 ).join('');
 
-const focusHtml = tp.focuses.map(x =>
-  `<div class="focus-card"><div class="focus-icon">${typeIcon(x.icon)}</div><div><div class="focus-title">${x.title}</div><div class="focus-desc">${x.desc}</div></div></div>`
-).join('');
-
-const barHtml = TYPE_ORDER.map(k => {
-  const t = T[k];
-  const p = Math.round((c[k] / QS.length) * 100);
-  return `<div><div class="cmeta"><span class="clbl">${typeIcon(k)}${t.name}</span><span class="cnum">${c[k]}번 · ${p}%</span></div><div class="ctrack"><div class="cfill" data-p="${p}"></div></div></div>`;
-}).join('');
-
-const pt = T[tp.partner];               
  document.getElementById('rcont').innerHTML=`
   <div class="rhdr fi">
     <div class="rpassport-top"><div class="reye">${safe(uname)}님의 외교 스타일 결과</div><div class="stamp">VISA / 06</div></div>
